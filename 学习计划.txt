@@ -1,0 +1,10 @@
+学习并复现Transformer
+学习Transformer的最新变种Performer
+理解并复现kaggle上的项目，主要为了理解工作时的解决问题思路，以及扩充
+复习笔记
+	+ 掌握基础知识，理解各类名词与含义，理解模型的作用和基本运作原理
+	+ 着重复习各类CNN、RNN模型与主题模型，在头脑中形成知识树
+复习机器学习算法、高数等（有一个GitHub里包含了需要的很多内容）
+复习算法
+复习sklearn、numpy、matplotlib、pyecharts、pyTorch
+看网上的模型复现课
