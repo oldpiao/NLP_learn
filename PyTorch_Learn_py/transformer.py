@@ -49,16 +49,16 @@ class EncoderDecoder(nn.Module):
         self.tgt_embed = tgt_embed
         self.generator = generator
 
-    def forward(self, src, src_mask, tgt, tgt_mask):
+    def forward(self, src, tgt, src_mask, tgt_mask):
         """
         :param src: 句子向量，输入文本
-        :param src_mask: 输入文本的掩码
         :param tgt: 句子向量，输出文本
+        :param src_mask: 输入文本的掩码
         :param tgt_mask: 输出文本的掩码
         :return:
         """
-        return self.decoder(self.encode(src, src_mask),
-                            src_mask, tgt, tgt_mask)
+        return self.decode(self.encode(src, src_mask),
+                           src_mask, tgt, tgt_mask)
 
     def encode(self, src, src_mask):
         return self.encoder(self.src_embed(src), src_mask)
@@ -99,16 +99,16 @@ class LayerNorm(nn.Module):
         # 因此要选择句子对应的维度后再计算
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
-        return self.a * (x - mean) / (std + self.eps) + self.b_2
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
 
 
-class SubLayerConntction(nn.Module):
+class SublayerConnection(nn.Module):
     """在层规范之后的残差连接。
     注意，为了代码的简单性，规范是第一个，而不是最后一个。
     包含标准化模型
     """
     def __init__(self, size, dropout):
-        super(SubLayerConntction, self).__init__()
+        super(SublayerConnection, self).__init__()
         self.norm = LayerNorm(size)
         self.dropout = nn.Dropout(dropout)
 
@@ -154,7 +154,7 @@ class EncoderLayer(nn.Module):
         super(EncoderLayer, self).__init__()
         self.self_attn = self_attn
         self.feed_forward = feed_forward
-        self.sublayer = clones(SubLayerConntction(size, dropout), 2)
+        self.sublayer = clones(SublayerConnection(size, dropout), 2)
         self.size = size
 
     def forward(self, x, mask):
@@ -192,7 +192,7 @@ class DecoderLayer(nn.Module):
         self.self_attn = self_attn
         self.src_attn = src_attn
         self.feed_forward = feed_forward
-        self.sublayer = clones(SubLayerConntction(size, dropout), 3)
+        self.sublayer = clones(SublayerConnection(size, dropout), 3)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         m = memory
@@ -245,7 +245,7 @@ class MultiHeadedAttention(nn.Module):
         if mask is not None:
             # 同样的掩码适用于所有的h头
             # 添加一个维度
-            mask = mask.unsqueese(1)
+            mask = mask.unsqueeze(1)
         nbatches = query.size(0)
         # QKV分别进入线性层，并改变维度
         # zip会根据少的数组确定结果长度
@@ -289,6 +289,360 @@ class Embeddings(nn.Module):
     def forward(self, x):
         return self.lut(x) * math.sqrt(self.d_model)
 
+
 # 1.11 位置编码
+class PositionalEncoding(nn.Module):
+    """位置编码
+    PE(pos, 2i) = sin(pos/10000^{2i/d_{model}})
+    PE(pos, 2i+1) = cos(pos/10000^{2i/d_{model}})
+    """
+    def __init__(self, d_model, dropout, max_len=5000):
+        """
+        :param d_model:
+        :param dropout:
+        :param max_len: 默认为5000，准备了足够多的位置编码供模型使用
+        """
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        # positional_encoding
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) *
+                             -(math.log(10000.0)/d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        x = x + Variable(self.pe[:, :x.size(1)],
+                         requires_grad=False)
+        return self.dropout(x)
+
+
 # 1.12 完整模型
-# 1.13 模型训练
+def make_model(src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
+    """连接完整模型并设置超参的函数
+    :param src_vocab: 输入词的词典大小（词数量）
+    :param tgt_vocab: 目标词的词典大小（词数量）
+    :param N: 模型层数，默认6层，可以根据计算能力与需求修改
+    :param d_model: 模型嵌入时向量长度，一般设置为512，方便存储和计算
+    :param d_ff: ff为Feed Forward，该参数即为正向传播的向量长度
+    :param h: 多头注意力的头的数量，一般为8
+    :param dropout: nn.Dropout的参数，默认是0.1，随机清理10%的数据
+    :return:
+    """
+    c = copy.deepcopy
+    attn = MultiHeadedAttention(h, d_model)  # 教程中未设置dropout参数
+    ff = PositionwiseFeedForward(d_model, d_ff, dropout=dropout)
+    position = PositionalEncoding(d_model, dropout)
+
+    model = EncoderDecoder(
+        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout=dropout), N),
+        Decoder(DecoderLayer(d_model, c(attn), c(attn), c(ff), dropout=dropout), N),
+        nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
+        nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
+        Generator(d_model, tgt_vocab)
+    )
+
+    # 这一点在代码中很重要。
+    # 使用Glorot / fan_avg初始化参数。
+    for p in model.parameters():
+        if p.dim() > 1:
+            # nn.init.xavier_uniform(p)  # 旧
+            nn.init.xavier_uniform_(p)  # 新
+    return model
+
+
+# 2 模型训练
+# 2.1 批和掩码
+class Batch:
+    """用于在训练过程中保存带掩码的一批数据的对象"""
+    def __init__(self, src, trg=None, pad=0):
+        """
+        :param src: 输入的句子向量
+        :param trg: 对应的输出
+        :param pad: 用于将句子填充到最长句的句长的填充物
+        """
+        self.src = src
+        self.src_mask = (src != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg[:, :-1]  # 去除结束符
+            self.trg_y = trg[:, 1:]  # 去除起始符
+            # 掩码
+            self.trg_mask = self.make_std_mask(self.trg, pad)
+            # 句子长度
+            self.ntokens = (self.trg_y != pad).data.sum()
+
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        """
+        创建一个掩码来隐藏填充中和未填充的单词
+        由于句子的长度不同，短句需要用pad填充，在为其创建mask时需要将填充部分全部排除在外，
+        :param tgt: 目标向量
+        :param pad: 填充物，非句子内容，用于补全句子长度的参数
+        :return:
+        """
+        # 将目标向量转换成bool向量，表示当前位置是否有词，并添加维度
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        # 再与创建的mask做与操作，创建出正确的mask
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
+
+# 2.2 训练循环
+def run_epoch(data_iter, model, loss_compute):
+    """
+    标准的训练和跟踪功能
+    :param data_iter: 待处理数据，[Batch(), Batch(), ...]
+    :param model: 用于训练的模型
+    :param loss_compute: 损失函数模型
+    :return:
+    """
+    start = time.time()
+    total_tokens = 0
+    total_loss = 0
+    tokens = 0
+    for i, batch in enumerate(data_iter):
+        out = model.forward(batch.src, batch.trg,
+                            batch.src_mask, batch.trg_mask)
+        loss = loss_compute(out, batch.trg_y, batch.ntokens)
+        total_loss += loss
+        total_tokens += batch.ntokens
+        tokens += batch.ntokens
+        if i % 50 == 1:
+            elapsed = time.time() - start
+            print("Epoch Step: %d Loss: %f Tokens per Sec: %f" %
+                  (i, loss / batch.ntokens, tokens / elapsed))
+            start = time.time()
+            tokens = 0
+    return total_loss / total_tokens
+
+
+# 2.3 训练数据和批处理
+global max_src_in_batch, max_tgt_in_batch
+def batch_size_fn(new, count, sofar):
+    """继续扩充batch,并计算令牌+填充的总数。"""
+    global max_src_in_batch, max_tgt_in_batch
+    if count == 1:
+        max_src_in_batch = 0
+        max_tgt_in_batch = 0
+    max_src_in_batch = max(max_src_in_batch, len(new.src))
+    max_src_in_batch = max(max_tgt_in_batch, len(new.trg) + 2)
+    src_elements = count * max_src_in_batch
+    tgt_elements = count * max_tgt_in_batch
+    return max(src_elements, tgt_elements)
+
+
+# 2.5 优化器
+class NoamOpt:
+    """Optim wrapper that implements rate.
+    创建一个智能调整学习速率的优化器，
+    在前期模型预热阶段速率越来越大，后面逐渐减小
+    """
+    def __init__(self, model_size, factor, warmup, optimizer):
+        """
+        :param model_size: 前面模型中的d_model参数，模型参数维度
+        :param factor: 系数，学习速率系数
+        :param warmup: 预热
+        :param optimizer: 优化器
+        """
+        self.model_size = model_size
+        self.factor = factor
+        self.warmup = warmup
+        self.optimizer = optimizer
+        self._step = 0
+        self._rate = 0
+
+    def step(self):
+        self._step += 1
+        rate = self.rate()
+        for p in self.optimizer.param_groups:
+            # 修改学习速率
+            p['lr'] = rate
+        self._rate = rate
+        self.optimizer.step()
+
+    def rate(self, step=None):
+        """学习速率（lr）"""
+        if step is None:
+            step = self._step
+        return self.factor * (self.model_size ** (-0.5) *
+                              min(step**(-0.5), step * self.warmup**(-1.5)))
+
+
+def get_std_opt(model):
+    opt = torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.8), eps=1e-9)
+    return NoamOpt(model.src_embed[0].d_model, 2, 4000, optimizer=opt)
+
+
+# 2.6 正则化
+# 2.6.1 标签平滑
+class LabelSmoothing(nn.Module):
+    def __init__(self, size, padding_idx, smoothing=0.0):
+        super(LabelSmoothing, self).__init__()
+        # size_average=False 改为 reduction="sum"
+        self.criterion = nn.KLDivLoss(reduction="sum")
+        self.padding_idx = padding_idx
+        self.confidence = 1.0 - smoothing
+        self.smoothing = smoothing
+        self.size = size
+        self.true_dist = None
+
+    def forward(self, x, target):
+        assert x.size(1) == self.size
+        true_dist = x.data.clone()
+        true_dist.fill_(self.smoothing / (self.size - 2))
+        true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
+        true_dist[:, self.padding_idx] = 0
+        mask = torch.nonzero(target.data == self.padding_idx)
+        if mask.dim() > 0:
+            true_dist.index_fill_(0, mask.squeeze(), 0.0)
+        self.true_dist = true_dist
+        return self.criterion(x, Variable(true_dist, requires_grad=False))
+
+
+# 3 第一个例子
+# 3.1 数据生成
+def data_gen(V, batch, nbatches):
+    """
+    为src-tgt复制任务生成随机数据
+    :param V: 生成的数据最大值，相当于词典大小
+    :param batch: 批次大小，一批数据中有多少句话
+    :param nbatches: 数据量
+    :return:
+    """
+    for i in range(nbatches):
+        # 从1开始，因为0是起始符
+        data = torch.from_numpy(np.random.randint(1, V, size=(batch, 10))).long()
+        data[:, 0] = 1
+        src = Variable(data, requires_grad=False)
+        tgt = Variable(data, requires_grad=False)
+        yield Batch(src, tgt, 0)
+
+
+# 3.2 损失计算
+class SimpleLossCompute(object):
+    """一个简单的损失计算和训练函数"""
+    def __init__(self, generator, criterion, opt=None):
+        """
+        :param generator: Generator, 线性层与softmax层
+        :param criterion: 损失函数
+        :param opt: 优化器
+        """
+        self.generator = generator
+        self.criterion = criterion
+        self.opt = opt
+
+    def __call__(self, x, y, norm):
+        x = self.generator(x)
+        loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
+                              y.contiguous().view(-1)) / norm
+        loss.backward()
+        if self.opt is not None:
+            self.opt.step()
+            self.opt.optimizer.zero_grad()
+        return loss.item() * norm
+
+
+class MultiGPULossCompute(object):
+    """多GPU损失函数"""
+    def __init__(self, generator, criterion, devices: list, opt=None, chunk_size=5):
+        """
+        :param generator: 待并行计算的模型的输出层，model.generator
+        :param criterion: 损失函数
+        :param devices: GPU计算设备，list，例：[0,1,2]
+        :param opt: 优化器
+        :param chunk_size: 块大小
+        """
+        self.generator = generator
+        self.criterion = nn.parallel.replicate(criterion, devices=devices)
+        self.opt = opt
+        self.devices = devices
+        self.chunk_size = chunk_size
+
+    def __call__(self, out, targets, normalize):
+        total = 0.0
+        generator = nn.parallel.replicate(self.generator,
+                                          devices=self.devices)
+        out_scatter = nn.parallel.scatter(out, target_gpus=self.devices)
+        out_grad = [[] for _ in out_scatter]
+        targets = nn.parallel.scatter(targets,
+                                      target_gpus=self.devices)
+
+        # 将数据拆分成更小的块，发配到不同的GPU算计算
+        chunk_size = self.chunk_size
+        for i in range(0, out_scatter[0].size(1), chunk_size):
+            # 预测分布
+            out_column = [[Variable(o[:, i:i+chunk_size].data,
+                                    requires_grad=self.opt is not None)]
+                          for o in out_scatter]
+            gen = nn.parallel.parallel_apply(generator, out_column)
+
+            # 计算损失
+            y = [(g.contiguous().view(-1, g.size(-1)),
+                  t[:, i:i+chunk_size].contiguous().view(-1))
+                 for g, t in zip(gen, targets)]
+            loss = nn.parallel.parallel_apply(self.criterion, y)
+
+            # sum and normalize loss
+            # 在第一个GPU上汇总数据，并求和、标准化loss
+            l = nn.parallel.gather(loss, target_device=self.devices[0])
+            l = l.sum()[0]/normalize
+            total += l.data[0]
+
+            # 输出transformer反向传播loss
+            if self.opt is not None:
+                l.backward()
+                for j, l in enumerate(loss):
+                    out_grad[j].append(out_column[j][0].grad.data.colone())
+
+        # Backprop all loss through transformer.
+        if self.opt is not None:
+            out_grad = [Variable(torch.cat(og, dim=1)) for og in out_grad]
+            o1 = out
+            o2 = nn.parallel.gather(out_grad, target_device=self.devices[0])
+
+            o1.backward(gradient=o2)
+            self.opt.step()
+            self.opt.optimizer.zero_grad()
+        return total * normalize
+
+
+# 3.3 贪心解码
+def greedy_decode(model: EncoderDecoder, src, src_mask, max_len, start_symbol):
+    """ 贪心解码
+    执行流程：
+        用起始符构建结果向量初始状态；
+        src通过encode模型，生成编码器结果，该结果会一直在解码器中使用；
+        循环解码：（循环次数为最大句子长度-1，因为起始符占用一位）
+            结果向量通过decode模型（会用到encode的结果）；
+            输出结果通过generator，变成各个词的概率值；
+            使用贪心算法获取最佳结果，将结果最佳到结果向量中；
+        输出结果向量。
+    :param model: 模型
+    :param src: 输入数据
+    :param src_mask: 输入数据掩码
+    :param max_len: 最大长度
+    :param start_symbol: 起始符
+    :return:
+    """
+    memory = model.encode(src, src_mask)
+    ys = torch.ones(1, 1).fill_(start_symbol).type_as(src)
+    for i in range(max_len-1):
+        out = model.decode(memory, src_mask,
+                     Variable(ys),
+                     Variable(subsequent_mask(ys.size(1)).type_as(src_mask)))
+        # 最后一位是结束符
+        prob = model.generator(out[:, -1])
+        # 贪心算法，仅看中每个位置上权重最大的值
+        # 此外还可以取前N个权重较大的值，全部带入后续训练，
+        # 在后续训练中也同样保留N个权重最大的，最终选择选出一个最优解
+        _, next_word = torch.max(prob, dim=1)
+        next_word = next_word.item()
+        # 一个词一个词预测的，预测结果添加到输出中，再放入模型继续预测下一个词。
+        ys = torch.cat([ys, torch.ones(1, 1).type_as(src).fill_(next_word)], dim=1)
+    return ys
+
+
