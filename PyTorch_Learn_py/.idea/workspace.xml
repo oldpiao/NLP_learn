@@ -2,16 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="6c4872c3-64d0-4bfc-b7a0-8ce481e4be14" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/ceshi/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ceshi/ceshi_1.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/en2de_transformer.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/test_transformer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/.ipynb_checkpoints/00-PyTorch笔记-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../PyTorch_Learn/.ipynb_checkpoints/00-PyTorch笔记-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/.ipynb_checkpoints/Transformer复现-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../PyTorch_Learn/.ipynb_checkpoints/Transformer复现-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/00-PyTorch笔记.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../PyTorch_Learn/00-PyTorch笔记.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/Transformer复现.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../PyTorch_Learn/Transformer复现.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/.ipynb_checkpoints/Transformer复现-checkpoint.ipynb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../PyTorch_Learn/Transformer复现.ipynb" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/transformer.py" beforeDir="false" afterPath="$PROJECT_DIR$/transformer.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -24,8 +17,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/transformer.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="497">
-              <caret line="194" column="49" selection-start-line="194" selection-start-column="49" selection-end-line="194" selection-end-column="49" />
+            <state relative-caret-position="173">
+              <caret line="182" column="27" lean-forward="true" selection-start-line="182" selection-start-column="27" selection-end-line="182" selection-end-column="27" />
               <folding>
                 <element signature="e#10#28#0" expanded="true" />
                 <element signature="e#296#786#0" />
@@ -77,7 +70,7 @@
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds">
+  <component name="ProjectFrameBounds" extendedState="6">
     <option name="x" value="676" />
     <option name="width" value="697" />
     <option name="height" value="735" />
@@ -225,7 +218,7 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="676" y="0" width="697" height="735" extended-state="0" />
+    <frame x="-8" y="-8" width="1382" height="744" extended-state="6" />
     <editor active="true" />
     <layout>
       <window_info content_ui="combo" id="Project" order="0" weight="0.3110774" />
@@ -372,8 +365,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/transformer.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="497">
-          <caret line="194" column="49" selection-start-line="194" selection-start-column="49" selection-end-line="194" selection-end-column="49" />
+        <state relative-caret-position="173">
+          <caret line="182" column="27" lean-forward="true" selection-start-line="182" selection-start-column="27" selection-end-line="182" selection-end-column="27" />
           <folding>
             <element signature="e#10#28#0" expanded="true" />
             <element signature="e#296#786#0" />
